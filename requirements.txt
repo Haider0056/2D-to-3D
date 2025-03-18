@@ -1,0 +1,6 @@
+numpy
+opencv-python
+jsonlib
+argparse
+loguru
+blender==3.6
