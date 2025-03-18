@@ -109,67 +109,272 @@ class FloorPlanProcessor:
         most_common_thickness = bins[np.argmax(hist)] * 2  # Multiply by 2 as distance transform gives half-thickness
         
         return max(3, int(most_common_thickness))
-    
+    def _are_parallel(self, line1, line2, angle_threshold=10):
+     """
+     Check if two lines are parallel within a given angle threshold.
+     
+     Args:
+         line1 (tuple): First line (x1, y1, x2, y2)
+         line2 (tuple): Second line (x1, y1, x2, y2)
+         angle_threshold (float): Maximum angle difference in degrees
+         
+     Returns:
+         bool: True if lines are parallel, False otherwise
+     """
+     # Calculate angles
+     angle1 = np.arctan2(line1[3] - line1[1], line1[2] - line1[0]) * 180 / np.pi
+     angle2 = np.arctan2(line2[3] - line2[1], line2[2] - line2[0]) * 180 / np.pi
+     
+     # Normalize angles to 0-180 range
+     angle1 = (angle1 + 180) % 180
+     angle2 = (angle2 + 180) % 180
+     
+     # Check if angles are similar
+     return abs(angle1 - angle2) < angle_threshold
+
+    def _calculate_line_distance(self, line1, line2):
+     """
+     Calculate the average distance between two parallel lines.
+     
+     Args:
+         line1 (tuple): First line (x1, y1, x2, y2)
+         line2 (tuple): Second line (x1, y1, x2, y2)
+         
+     Returns:
+         float: Average distance between the lines
+     """
+     x1, y1, x2, y2 = line1
+     x3, y3, x4, y4 = line2
+     
+     # For horizontal lines, calculate vertical distance
+     if abs(y2 - y1) < abs(x2 - x1):
+         return abs((y1 + y2) / 2 - (y3 + y4) / 2)
+     # For vertical lines, calculate horizontal distance
+     else:
+         return abs((x1 + x2) / 2 - (x3 + x4) / 2)
+ 
     def detect_walls(self):
-        """
-        Detect walls in the floor plan using improved line detection and grouping.
-        
-        Returns:
-            list: List of detected wall line segments [(x1, y1, x2, y2), ...]
-        """
-        if self.processed_image is None:
-            self.preprocess()
-        
-        # Use Probabilistic Hough Transform with adaptive parameters
-        min_line_length = max(30, self.height / 20)
-        max_line_gap = self.estimated_wall_thickness * 2
-        
-        lines = cv2.HoughLinesP(
-            self.processed_image, 
-            rho=1, 
-            theta=np.pi/180, 
-            threshold=50, 
-            minLineLength=min_line_length, 
-            maxLineGap=max_line_gap
-        )
-        
-        if lines is None:
-            self.walls = []
-            return []
-        
-        # Extract all line segments
-        line_segments = [line[0] for line in lines]
-        
-        # Group line segments by orientation
-        horizontal_lines = []
-        vertical_lines = []
-        
-        for x1, y1, x2, y2 in line_segments:
-            # Calculate angle and length
-            angle = np.abs(np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi)
-            length = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-            
-            # Filter by angle
-            if angle < 20 or angle > 160:
-                horizontal_lines.append((x1, y1, x2, y2, length))
-            elif angle > 70 and angle < 110:
-                vertical_lines.append((x1, y1, x2, y2, length))
-        
-        # Sort by length (longest first)
-        horizontal_lines.sort(key=lambda x: x[4], reverse=True)
-        vertical_lines.sort(key=lambda x: x[4], reverse=True)
-        
-        # Merge collinear segments
-        merged_horizontal = self._merge_line_segments(horizontal_lines)
-        merged_vertical = self._merge_line_segments(vertical_lines)
-        
-        # Combine all wall lines
-        wall_lines = []
-        for x1, y1, x2, y2, _ in merged_horizontal + merged_vertical:
-            wall_lines.append((x1, y1, x2, y2))
-        
-        self.walls = wall_lines
-        return wall_lines
+     """
+     Detect walls in the floor plan with improved line detection and merging of parallel lines.
+     
+     Returns:
+         list: List of detected wall line segments [(x1, y1, x2, y2), ...]
+     """
+     if self.processed_image is None:
+         self.preprocess()
+     
+     # Use Probabilistic Hough Transform with adaptive parameters
+     min_line_length = max(30, self.height / 20)
+     max_line_gap = self.estimated_wall_thickness * 2
+     
+     lines = cv2.HoughLinesP(
+         self.processed_image, 
+         rho=1, 
+         theta=np.pi/180, 
+         threshold=190, 
+         minLineLength=min_line_length, 
+         maxLineGap=max_line_gap
+     )
+     
+     if lines is None:
+         self.walls = []
+         return []
+     
+     # Extract all line segments
+     line_segments = [line[0] for line in lines]
+     
+     # Group line segments by orientation
+     horizontal_lines = []
+     vertical_lines = []
+     
+     for x1, y1, x2, y2 in line_segments:
+         # Calculate angle and length
+         angle = np.abs(np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi)
+         length = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+         
+         # Filter by angle
+         if angle < 20 or angle > 160:
+             horizontal_lines.append((x1, y1, x2, y2, length))
+         elif angle > 70 and angle < 110:
+             vertical_lines.append((x1, y1, x2, y2, length))
+     
+     # Sort by length (longest first)
+     horizontal_lines.sort(key=lambda x: x[4], reverse=True)
+     vertical_lines.sort(key=lambda x: x[4], reverse=True)
+     
+     # Merge collinear segments
+     merged_horizontal = self._merge_line_segments(horizontal_lines)
+     merged_vertical = self._merge_line_segments(vertical_lines)
+     
+     # Extract line segments without length component
+     horizontal_segments = [(x1, y1, x2, y2) for x1, y1, x2, y2, _ in merged_horizontal]
+     vertical_segments = [(x1, y1, x2, y2) for x1, y1, x2, y2, _ in merged_vertical]
+     
+     # Merge parallel lines that are close to each other
+     distance_threshold = self.estimated_wall_thickness * 4.25  
+     
+     # Apply the improved parallel line merging
+     merged_horizontal = self._merge_parallel_lines(horizontal_segments, distance_threshold)
+     merged_vertical = self._merge_parallel_lines(vertical_segments, distance_threshold)
+     
+     # Combine all wall lines
+     wall_lines = merged_horizontal + merged_vertical
+     
+     # Filter out very short lines that might be noise
+     min_wall_length = max(15, self.estimated_wall_thickness * 3)
+     filtered_walls = []
+     for x1, y1, x2, y2 in wall_lines:
+         length = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+         if length >= min_wall_length:
+             filtered_walls.append((x1, y1, x2, y2))
+     
+     self.walls = filtered_walls
+     return filtered_walls
+
+    def _merge_parallel_lines(self, lines, distance_threshold):
+      """
+      Improved method to merge parallel lines that are within a specified distance threshold.
+      Avoids creating spurious walls and has better overlap detection.
+      
+      Args:
+          lines (list): List of line segments [(x1, y1, x2, y2), ...]
+          distance_threshold (float): Maximum distance between lines to merge
+          
+      Returns:
+          list: List of merged line segments with integer coordinates
+      """
+      if not lines:
+          return []
+      
+      result = []
+      processed = [False] * len(lines)
+      
+      # Define a minimum overlap ratio for merging parallel lines
+      min_overlap_ratio = 0.1
+      
+      for i in range(len(lines)):
+          if processed[i]:
+              continue
+              
+          processed[i] = True
+          current_line = lines[i]
+          merged_lines = [current_line]
+          
+          # Get the "direction" of the current line
+          is_horizontal = abs(current_line[3] - current_line[1]) < abs(current_line[2] - current_line[0])
+          
+          # Find all parallel lines within distance threshold
+          for j in range(i + 1, len(lines)):
+              if processed[j]:
+                  continue
+                  
+              other_line = lines[j]
+              
+              # Only process lines with the same orientation
+              other_is_horizontal = abs(other_line[3] - other_line[1]) < abs(other_line[2] - other_line[0])
+              if is_horizontal != other_is_horizontal:
+                  continue
+              
+              if self._are_parallel(current_line, other_line):
+                  distance = self._calculate_line_distance(current_line, other_line)
+                  
+                  # Check if lines have sufficient overlap before merging
+                  has_overlap = False
+                  if is_horizontal:
+                      # For horizontal lines, check x-overlap
+                      current_x_range = [min(current_line[0], current_line[2]), max(current_line[0], current_line[2])]
+                      other_x_range = [min(other_line[0], other_line[2]), max(other_line[0], other_line[2])]
+                      
+                      # Calculate overlap
+                      overlap_start = max(current_x_range[0], other_x_range[0])
+                      overlap_end = min(current_x_range[1], other_x_range[1])
+                      overlap_length = max(0, overlap_end - overlap_start)
+                      
+                      # Current line length
+                      current_length = current_x_range[1] - current_x_range[0]
+                      other_length = other_x_range[1] - other_x_range[0]
+                      
+                      # Check if overlap is sufficient
+                      if overlap_length > min(current_length, other_length) * min_overlap_ratio:
+                          has_overlap = True
+                  else:
+                      # For vertical lines, check y-overlap
+                      current_y_range = [min(current_line[1], current_line[3]), max(current_line[1], current_line[3])]
+                      other_y_range = [min(other_line[1], other_line[3]), max(other_line[1], other_line[3])]
+                      
+                      # Calculate overlap
+                      overlap_start = max(current_y_range[0], other_y_range[0])
+                      overlap_end = min(current_y_range[1], other_y_range[1])
+                      overlap_length = max(0, overlap_end - overlap_start)
+                      
+                      # Current line length
+                      current_length = current_y_range[1] - current_y_range[0]
+                      other_length = other_y_range[1] - other_y_range[0]
+                      
+                      # Check if overlap is sufficient
+                      if overlap_length > min(current_length, other_length) * min_overlap_ratio:
+                          has_overlap = True
+                  
+                  # Only merge if lines are close enough and have sufficient overlap
+                  if distance <= distance_threshold and has_overlap:
+                      merged_lines.append(other_line)
+                      processed[j] = True
+          
+          # If we found lines to merge
+          if len(merged_lines) > 1:
+              # For horizontal lines
+              if is_horizontal:
+                  # Get all x and y coordinates
+                  all_x = [line[0] for line in merged_lines] + [line[2] for line in merged_lines]
+                  all_y = [line[1] for line in merged_lines] + [line[3] for line in merged_lines]
+                  
+                  # Calculate weighted average y-coordinate based on line lengths
+                  weighted_y = 0
+                  total_weight = 0
+                  
+                  for x1, y1, x2, y2 in merged_lines:
+                      length = abs(x2 - x1)
+                      weighted_y += (y1 + y2) / 2 * length
+                      total_weight += length
+                  
+                  avg_y = weighted_y / total_weight if total_weight > 0 else sum(all_y) / len(all_y)
+                  
+                  # Use min and max x values
+                  min_x = min(all_x)
+                  max_x = max(all_x)
+                  
+                  # Create the merged line
+                  result.append((int(min_x), int(avg_y), int(max_x), int(avg_y)))
+              
+              # For vertical lines
+              else:
+                  # Get all x and y coordinates
+                  all_x = [line[0] for line in merged_lines] + [line[2] for line in merged_lines]
+                  all_y = [line[1] for line in merged_lines] + [line[3] for line in merged_lines]
+                  
+                  # Calculate weighted average x-coordinate based on line lengths
+                  weighted_x = 0
+                  total_weight = 0
+                  
+                  for x1, y1, x2, y2 in merged_lines:
+                      length = abs(y2 - y1)
+                      weighted_x += (x1 + x2) / 2 * length
+                      total_weight += length
+                  
+                  avg_x = weighted_x / total_weight if total_weight > 0 else sum(all_x) / len(all_x)
+                  
+                  # Use min and max y values
+                  min_y = min(all_y)
+                  max_y = max(all_y)
+                  
+                  # Create the merged line
+                  result.append((int(avg_x), int(min_y), int(avg_x), int(max_y)))
+          else:
+              # Just add the current line
+              result.append((int(current_line[0]), int(current_line[1]), 
+                            int(current_line[2]), int(current_line[3])))
+      
+      return result
     
     def _merge_line_segments(self, line_segments):
         """
@@ -413,8 +618,6 @@ class FloorPlanProcessor:
      
      self.windows = windows
      return windows
-    import logging
-
 
     def detect_rooms(self):
      """
@@ -653,11 +856,11 @@ class FloorPlanProcessor:
                     door_widths.append(h)
             
             avg_door_width_pixels = sum(door_widths) / len(door_widths)
-            scale_factor = 0.8 / avg_door_width_pixels  # meters per pixel
+            scale_factor = 1.2 / avg_door_width_pixels  # meters per pixel
         else:
             # If no doors detected, use a standard scale
             # Assuming a typical room width of 4 meters
-            scale_factor = 4.0 / width_pixels
+            scale_factor = 6.0 / width_pixels
         
         self.scale_factor = scale_factor
         
@@ -777,10 +980,10 @@ class FloorPlanProcessor:
                 cv2.putText(visualization, "Door", (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         
         # Draw windows
-        # if self.windows is not None:
-        #     for x, y, w, h, angle in self.windows:
-        #         cv2.rectangle(visualization, (x, y), (x + w, y + h), (255, 0, 0), 2)
-        #         cv2.putText(visualization, "Window", (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        if self.windows is not None:
+            for x, y, w, h, angle in self.windows:
+                cv2.rectangle(visualization, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                cv2.putText(visualization, "Window", (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
         
         # Add scale information
         if self.room_dimensions is not None:
