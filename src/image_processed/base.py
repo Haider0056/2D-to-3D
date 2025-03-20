@@ -163,7 +163,7 @@ class FloorPlanProcessor:
     
     def detect_windows(self):
         """Wrapper method to call the window detection function"""
-        self.windows = detect_windows(self)
+        self.windows = detect_windows(self,self.image_path)
         return self.windows
     
     def detect_rooms(self):

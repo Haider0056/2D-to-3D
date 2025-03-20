@@ -66,7 +66,7 @@ def detect_doors(self):
      
      # Additional detection for doors shown as breaks in walls with perpendicular lines
      # Find lines that could be door indicators
-     lines = cv2.HoughLinesP(door_img, 1, np.pi/180, 170, minLineLength=40, maxLineGap=1)
+     lines = cv2.HoughLinesP(door_img, 1, np.pi/180, 70, minLineLength=40, maxLineGap=1)
      
      if lines is not None:
          for line in lines:
