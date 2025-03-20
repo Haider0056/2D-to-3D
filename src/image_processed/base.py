@@ -158,12 +158,12 @@ class FloorPlanProcessor:
     
     def detect_doors(self):
         """Wrapper method to call the door detection function"""
-        self.doors = _detect_doors(self)
+        self.doors = _detect_doors(self,self.image,confidence_threshold=1, overlap_threshold=50)
         return self.doors
     
     def detect_windows(self):
         """Wrapper method to call the window detection function"""
-        self.windows = detect_windows(self,self.image_path)
+        self.windows = detect_windows(self,self.image,confidence_threshold=50, overlap_threshold=50)
         return self.windows
     
     def detect_rooms(self):

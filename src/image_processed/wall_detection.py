@@ -843,3 +843,86 @@ def remove_isolated_walls(walls, distance_threshold=30):
             result.append(wall1)
             
     return result
+
+
+
+# def detect_walls(self, image_path, confidence_threshold=1):
+#     """
+#     Detect walls in the floor plan using the Roboflow API.
+    
+#     Args:
+#         image_path (str, optional): Path to the floor plan image. If None, uses self.processed_image.
+#         confidence_threshold (int): Minimum confidence score (0-100) for wall detection.
+    
+#     Returns:
+#         list: List of detected wall line segments [(x1, y1, x2, y2), ...]
+#     """
+#     print(f"Confidence threshold for walls: {confidence_threshold}")
+    
+#     # Initialize the Roboflow client
+#     CLIENT = InferenceHTTPClient(
+#         api_url="https://detect.roboflow.com",
+#         api_key="Bg1c2OnSG36KxwCjUl82"
+#     )
+    
+#     # Use either the path or the processed image
+#     img_to_use = "floor_plan.jpg"
+    
+#     # Handle different input types
+#     if isinstance(img_to_use, str):
+#         result = CLIENT.infer(img_to_use, model_id="wall-detection-xi9ox/2")
+#     else:
+#         # Save the processed image temporarily if it's not a file path
+#         temp_path = "/tmp/temp_wall_image.jpg"
+#         cv2.imwrite(temp_path, img_to_use)
+#         result = CLIENT.infer(temp_path, model_id="wall-detection-xi9ox/2")
+    
+#     # Parse results into wall segments
+#     wall_segments = []
+#     print("walls",result)
+#     print(f"Number of wall predictions: {len(result.get('predictions', []))}")
+    
+#     for prediction in result.get('predictions', []):
+#         # Filter based on confidence threshold (convert from 0-1 to 0-100)
+#         confidence = prediction.get('confidence', 0) * 100
+#         if confidence < confidence_threshold:
+#             continue
+        
+#         # Extract bounding box coordinates
+#         x_center = prediction['x']
+#         y_center = prediction['y']
+#         width = prediction['width']
+#         height = prediction['height']
+        
+#         # Determine if this is a horizontal or vertical wall
+#         is_horizontal = width > height
+        
+#         # Convert bounding box to line segment
+#         if is_horizontal:
+#             x1 = int(x_center - width / 2)
+#             y1 = int(y_center)
+#             x2 = int(x_center + width / 2)
+#             y2 = int(y_center)
+#         else:  # vertical
+#             x1 = int(x_center)
+#             y1 = int(y_center - height / 2)
+#             x2 = int(x_center)
+#             y2 = int(y_center + height / 2)
+        
+#         wall_segments.append((x1, y1, x2, y2))
+    
+#     print(f"Wall segments after filtering by confidence: {len(wall_segments)}")
+    
+#     if not wall_segments:
+#         print("No walls found after confidence filtering")
+#         self.walls = []
+#         return []
+    
+#     # Apply post-processing to the walls
+#     # filtered_walls = fix_wall_junctions(wall_segments, threshold=max(3, self.estimated_wall_thickness))
+#     # filtered_walls = remove_isolated_walls(filtered_walls, distance_threshold=self.estimated_wall_thickness * 3)
+    
+#     # Store the walls
+#     # self.walls = filtered_walls
+    
+#     return wall_segments
