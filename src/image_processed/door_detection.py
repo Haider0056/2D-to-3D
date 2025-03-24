@@ -1,8 +1,14 @@
 import cv2
 import numpy as np
-from inference_sdk import InferenceHTTPClient
+from inference_sdk import InferenceHTTPClient, InferenceConfiguration
+from dotenv import load_dotenv
+import os
+# Load environment variables from .env
+load_dotenv()
 
-def detect_doors(self, image_path, confidence_threshold=2, overlap_threshold=50):
+# Access the variables
+api_key = os.getenv("API_KEY")
+def detect_doors(self, image_path, confidence_threshold=0.1, overlap_threshold=0.5):
     """
     Detect doors in the floor plan using the Roboflow API and represent them
     as closed doors attached to walls.
@@ -11,29 +17,30 @@ def detect_doors(self, image_path, confidence_threshold=2, overlap_threshold=50)
         image_path (str): Path to the floor plan image.
         confidence_threshold (int): Minimum confidence score (0-100) for door detection.
         overlap_threshold (int): Maximum overlap percentage (0-100) allowed between doors.
+        Note: overlap_threshold is kept for backward compatibility but not used.
     
     Returns:
         list: List of detected door positions [(x, y, width, height, angle), ...]
         Note: The returned coordinates represent closed doors on walls.
     """
-
-    print(f"Door detection confidence threshold: {confidence_threshold}")
-    print(f"Door detection overlap threshold: {overlap_threshold}")
     
     CLIENT = InferenceHTTPClient(
         api_url="https://detect.roboflow.com",
-        api_key="Bg1c2OnSG36KxwCjUl82"
+        api_key=api_key
     )
-
+    custom_configuration = InferenceConfiguration(
+        confidence_threshold=confidence_threshold,
+    )
     # Use either the path or the image object, depending on what's provided
     if isinstance(image_path, str):
-        result = CLIENT.infer("floor_plan.jpg", model_id="doors-vetjc/1")   #image_path or floor_plan.jpg
+         with CLIENT.use_configuration(custom_configuration):
+          result = CLIENT.infer(image_path, model_id="doors-vetjc/1")   #image_path or floor_plan.jpg
     else:
         # Assuming image_path is actually an image object
         # Save the image temporarily and use the path
         temp_path = "/tmp/temp_door_image.jpg"
         cv2.imwrite(temp_path, image_path)
-        result = CLIENT.infer("floor_plan.jpg", model_id="doors-vetjc/1")
+        result = CLIENT.infer(image_path, model_id="doors-vetjc/1")
 
     # Parse result into (x, y, width, height, angle)
     door_candidates_list = []
@@ -67,14 +74,10 @@ def detect_doors(self, image_path, confidence_threshold=2, overlap_threshold=50)
     if not door_candidates_list:
         print("No doors found after confidence filtering")
         return []
-        
-    # Apply non-maximum suppression to remove overlapping doors
-    try:
-        filtered_by_overlap = self._non_maximum_suppression(door_candidates_list, overlap_threshold/100)
-        print(f"Doors after NMS: {len(filtered_by_overlap)}")
-    except Exception as e:
-        print(f"Error in NMS for doors: {e}")
-        filtered_by_overlap = door_candidates_list  # Fallback
+    
+    # Skip NMS entirely - use all candidates that passed confidence threshold
+    filtered_by_overlap = door_candidates_list
+    print(f"Doors after confidence filtering: {len(filtered_by_overlap)}")
     
     # Make sure walls are detected first
     if self.walls is None:
@@ -92,7 +95,7 @@ def detect_doors(self, image_path, confidence_threshold=2, overlap_threshold=50)
     final_doors = []
     
     # Door area uniqueness constraint
-    area_size = 150  # pixels
+    area_size = 100  # pixels
     door_areas = {}
     
     # Sort doors by size in descending order
@@ -201,7 +204,7 @@ def detect_doors(self, image_path, confidence_threshold=2, overlap_threshold=50)
             new_w = standard_door_thickness
             new_h = standard_door_length
             new_x = int(wall_point_x - new_w / 2)  # Position door ON the wall
-            new_y = int(wall_point_y - new_h / 2)  # Center door on wall point
+            new_y = int(wall_point_y - new_h / 2) + 20  # Center door on wall point
             if wall_dir_x < 0 or (wall_dir_x == 0 and wall_point_x > center_x):
                 # If wall is to the left of door center, place door to right of wall
                 new_x = int(wall_point_x)

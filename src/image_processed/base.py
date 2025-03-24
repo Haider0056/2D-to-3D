@@ -153,7 +153,7 @@ class FloorPlanProcessor:
     # Wrapper methods to call the imported functions with 'self'
     def detect_walls(self):
         """Wrapper method to call the wall detection function"""
-        self.walls = _detect_walls(self)
+        self.walls = _detect_walls(self,self.image)
         return self.walls
     
     def detect_doors(self):
@@ -169,6 +169,7 @@ class FloorPlanProcessor:
     def detect_rooms(self):
         """Wrapper method to call the room detection function"""
         self.rooms = detect_rooms(self)
+        print("rooms",self.rooms)
         return self.rooms
     
     def calculate_room_dimensions(self):

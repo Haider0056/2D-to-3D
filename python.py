@@ -3,7 +3,7 @@ import numpy as np
 
 def remove_grid_lines():
     # Load image
-    image_path = "example.jpg"
+    image_path = "floor_plan.jpg"
     src = cv2.imread(image_path, cv2.IMREAD_COLOR)
     if src is None:
         print("Could not open or find the image!")

@@ -1,7 +1,14 @@
-from inference_sdk import InferenceHTTPClient
+from inference_sdk import InferenceHTTPClient, InferenceConfiguration
 import numpy as np
 import cv2
-def detect_windows(self, image_path, confidence_threshold=50, overlap_threshold=50):
+from dotenv import load_dotenv
+import os
+# Load environment variables from .env
+load_dotenv()
+
+# Access the variables
+api_key = os.getenv("API_KEY")
+def detect_windows(self, image_path, confidence_threshold=0.2, overlap_threshold=0.5):
     """
     Detect windows in the floor plan using the Roboflow API and filter out
     windows that don't have any wall attached to them.
@@ -14,18 +21,18 @@ def detect_windows(self, image_path, confidence_threshold=50, overlap_threshold=
     Returns:
         list: List of detected window positions [(x, y, width, height, angle), ...]
     """
-
-    print(f"Confidence threshold: {confidence_threshold}")
-    print(f"Overlap threshold: {overlap_threshold}")
     
     CLIENT = InferenceHTTPClient(
         api_url="https://detect.roboflow.com",
-        api_key="Bg1c2OnSG36KxwCjUl82"
+        api_key=api_key,
     )
-
+    custom_configuration = InferenceConfiguration(
+        confidence_threshold=confidence_threshold,
+    )
     # Use either the path or the image object, depending on what's provided
     if isinstance(image_path, str):
-        result = CLIENT.infer(image_path, model_id="window-detection-in-floor-plans/1")
+         with CLIENT.use_configuration(custom_configuration):
+           result = CLIENT.infer(image_path, model_id="window-detection-in-floor-plans/1")
     else:
         # Assuming image_path is actually an image object
         # You'll need a way to convert OpenCV image to bytes or file
