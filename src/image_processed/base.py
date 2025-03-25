@@ -169,7 +169,6 @@ class FloorPlanProcessor:
     def detect_rooms(self):
         """Wrapper method to call the room detection function"""
         self.rooms = detect_rooms(self)
-        print("rooms",self.rooms)
         return self.rooms
     
     def calculate_room_dimensions(self):

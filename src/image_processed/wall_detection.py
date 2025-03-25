@@ -248,7 +248,6 @@ def detect_walls(self, image_path, confidence_threshold=0.001):
         
         wall_segments.append((x1, y1, x2, y2))
     
-    print(f"Wall segments after filtering by confidence: {len(wall_segments)}")
     
     if not wall_segments:
         print("No walls found after confidence filtering")

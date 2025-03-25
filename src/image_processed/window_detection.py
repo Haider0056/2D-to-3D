@@ -44,7 +44,6 @@ def detect_windows(self, image_path, confidence_threshold=0.2, overlap_threshold
 
     # Parse result into (x, y, width, height, angle)
     window_candidates_list = []
-    
     # Debug print
     print(f"Number of predictions: {len(result.get('predictions', []))}")
     
@@ -67,8 +66,6 @@ def detect_windows(self, image_path, confidence_threshold=0.2, overlap_threshold
         y = int(y_center - height / 2)
         window_candidates_list.append((x, y, int(width), int(height), angle, confidence))
     
-    # Debug print
-    print(f"Number of candidate windows after confidence filtering: {len(window_candidates_list)}")
     
     # Check if window_candidates_list is empty or not properly formatted
     if not window_candidates_list:
@@ -142,9 +139,7 @@ def detect_windows(self, image_path, confidence_threshold=0.2, overlap_threshold
     self.windows = filtered_windows
     return filtered_windows
 
-# Add these methods to the FloorPlanProcessor class in base.py
 
-# In window_detection.py
 def _non_maximum_suppression(windows, iou_threshold=0.5):
     """
     Apply non-maximum suppression to remove overlapping window detections.
