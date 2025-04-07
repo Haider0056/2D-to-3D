@@ -66,9 +66,7 @@ def detect_doors(self, image_path, confidence_threshold=0.1, overlap_threshold=0
         x = int(x_center - width / 2)
         y = int(y_center - height / 2)
         door_candidates_list.append((x, y, int(width), int(height), angle, confidence))
-    
-    # Debug print
-    print(f"Number of candidate doors after confidence filtering: {len(door_candidates_list)}")
+
     
     # Check if door_candidates_list is empty or not properly formatted
     if not door_candidates_list:

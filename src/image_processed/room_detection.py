@@ -194,7 +194,7 @@ def calculate_room_dimensions(self):
         for room_contour in self.rooms:
             # Calculate area
             area_pixels = cv2.contourArea(room_contour)
-            area_meters = area_pixels * (scale_factor ** 2)
+            area_meters = area_pixels * (scale_factor ** 1.7)
             
             # Calculate perimeter
             perimeter_pixels = cv2.arcLength(room_contour, True)
@@ -241,3 +241,69 @@ def calculate_room_dimensions(self):
         
         self.room_dimensions = dimensions
         return dimensions
+# def detect_rooms(inference_instance):
+#     """
+#     Detect rooms in the floor plan using Roboflow Inference SDK.
+    
+#     Returns:
+#         list: List of room contours
+#     """
+#     try:
+#         # Create Roboflow client without configuration argument
+#         client = InferenceHTTPClient(
+#             api_url="https://detect.roboflow.com",
+#             api_key=os.getenv('API_KEY')
+#         )
+
+#         # Perform inference on the image using hardcoded model
+#         results = client.infer(
+#             inference_instance.image, 
+#             model_id="room-detection-6nzte/1"
+#         )
+
+#         # Convert detections to contours
+#         room_contours = []
+#         rectangular_contours = []
+
+#         for prediction in results.get('predictions', []):
+#             # Extract bounding box
+#             x = int(prediction['x'] - prediction['width'] / 2)
+#             y = int(prediction['y'] - prediction['height'] / 2)
+#             w = int(prediction['width'])
+#             h = int(prediction['height'])
+
+#             # Create contour in the same format as the original method
+#             contour = np.array([
+#                 [[x, y]],
+#                 [[x+w, y]],
+#                 [[x+w, y+h]],
+#                 [[x, y+h]]
+#             ], dtype=np.int32)
+
+#             # Filter rooms based on size (similar to original method)
+#             area = cv2.contourArea(contour)
+#             min_room_size = (inference_instance.width * inference_instance.height) * 0.01  # 1% of image area
+#             max_room_size = (inference_instance.width * inference_instance.height) * 0.5   # 50% of image area
+
+#             if min_room_size < area < max_room_size:
+#                 # Original contour (polygon)
+#                 epsilon = 0.01 * cv2.arcLength(contour, True)
+#                 approx_contour = cv2.approxPolyDP(contour, epsilon, True)
+#                 room_contours.append(approx_contour)
+
+#                 # Rectangular contour
+#                 rectangular_contours.append(contour)
+
+#         # Store both types of contours
+#         inference_instance.rooms = room_contours
+#         inference_instance.rectangular_rooms = rectangular_contours
+
+#         return room_contours
+
+#     except Exception as e:
+#         print(f"Error in Roboflow room detection: {e}")
+#         return []
+
+#     except Exception as e:
+#         print(f"Error in Roboflow room detection: {e}")
+#         return []
