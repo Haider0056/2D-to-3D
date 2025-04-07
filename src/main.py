@@ -1,6 +1,6 @@
 import os
 import argparse
-from src.image_processing import FloorPlanProcessor
+from src.image_processed.base import FloorPlanProcessor
 from src.model_generation import Model3DGenerator
 # Save the processed image (corrected)
 import cv2
