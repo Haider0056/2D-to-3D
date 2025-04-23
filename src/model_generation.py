@@ -335,6 +335,7 @@ class Model3DGenerator:
 import bpy
 import os
 import sys
+import math
 
 # Get arguments
 argv = sys.argv
@@ -348,77 +349,292 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete()
 
-# Import OBJ with correct split_mode parameter
+# Import OBJ
 bpy.ops.import_scene.obj(filepath=input_path, split_mode='ON')
 
-# Add some basic lighting
-bpy.ops.object.light_add(type='SUN', location=(0, 0, 10))
-sun = bpy.context.active_object
-sun.data.energy = 2.0
+# Create better materials
+def create_wall_material():
+    mat = bpy.data.materials.new(name="wall_material")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    
+    # Clear default nodes
+    for node in nodes:
+        nodes.remove(node)
+    
+    # Create nodes
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    noise = nodes.new(type='ShaderNodeTexNoise')
+    mapping = nodes.new(type='ShaderNodeMapping')
+    tex_coord = nodes.new(type='ShaderNodeTexCoord')
+    color_ramp = nodes.new(type='ShaderNodeValToRGB')
+    
+    # Setup noise texture
+    noise.inputs['Scale'].default_value = 10.0
+    noise.inputs['Detail'].default_value = 2.0
+    
+    # Setup color ramp
+    color_ramp.color_ramp.elements[0].position = 0.4
+    color_ramp.color_ramp.elements[0].color = (0.85, 0.85, 0.85, 1.0)
+    color_ramp.color_ramp.elements[1].position = 0.6
+    color_ramp.color_ramp.elements[1].color = (0.95, 0.95, 0.95, 1.0)
+    
+    # Setup material
+    principled.inputs['Base Color'].default_value = (0.9, 0.9, 0.9, 1.0)
+    principled.inputs['Roughness'].default_value = 0.7
+    principled.inputs['Specular'].default_value = 0.1
+    
+    # Link nodes
+    links = mat.node_tree.links
+    links.new(tex_coord.outputs['Generated'], mapping.inputs['Vector'])
+    links.new(mapping.outputs['Vector'], noise.inputs['Vector'])
+    links.new(noise.outputs['Fac'], color_ramp.inputs['Fac'])
+    links.new(color_ramp.outputs['Color'], principled.inputs['Base Color'])
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return mat
 
-# Add a camera
-bpy.ops.object.camera_add(location=(5, -5, 5))
-cam = bpy.context.active_object
-cam.rotation_euler = (0.9, 0, 0.8)
-bpy.context.scene.camera = cam
+def create_floor_material():
+    mat = bpy.data.materials.new(name="floor_material")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    
+    # Clear default nodes
+    for node in nodes:
+        nodes.remove(node)
+    
+    # Create nodes
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    noise = nodes.new(type='ShaderNodeTexNoise')
+    mapping = nodes.new(type='ShaderNodeMapping')
+    tex_coord = nodes.new(type='ShaderNodeTexCoord')
+    
+    # Setup noise texture
+    noise.inputs['Scale'].default_value = 20.0
+    noise.inputs['Detail'].default_value = 3.0
+    
+    # Setup material
+    principled.inputs['Base Color'].default_value = (0.7, 0.68, 0.64, 1.0)
+    principled.inputs['Roughness'].default_value = 0.6
+    principled.inputs['Specular'].default_value = 0.2
+    
+    # Link nodes
+    links = mat.node_tree.links
+    links.new(tex_coord.outputs['Generated'], mapping.inputs['Vector'])
+    links.new(mapping.outputs['Vector'], noise.inputs['Vector'])
+    links.new(noise.outputs['Fac'], principled.inputs['Normal'])
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return mat
 
-# Separate objects by material and apply modifiers
-objects_to_process = []
-for obj in bpy.context.scene.objects:
-    if obj.type == 'MESH':
-        # Select and make active
-        bpy.ops.object.select_all(action='DESELECT')
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
+def create_door_material():
+    mat = bpy.data.materials.new(name="door_material")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    
+    # Clear default nodes
+    for node in nodes:
+        nodes.remove(node)
+    
+    # Create nodes
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    
+    # Setup material
+    principled.inputs['Base Color'].default_value = (0.6, 0.4, 0.2, 1.0)
+    principled.inputs['Roughness'].default_value = 0.4
+    principled.inputs['Specular'].default_value = 0.3
+    
+    # Link nodes
+    links = mat.node_tree.links
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return mat
+
+def create_window_material():
+    mat = bpy.data.materials.new(name="window_material")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    
+    # Clear default nodes
+    for node in nodes:
+        nodes.remove(node)
+    
+    # Create nodes
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    
+    # Setup material - use transparency for windows
+    principled.inputs['Base Color'].default_value = (0.8, 0.9, 1.0, 1.0)
+    principled.inputs['Roughness'].default_value = 0.1
+    principled.inputs['Specular'].default_value = 0.9
+    principled.inputs['Transmission'].default_value = 0.9
+    principled.inputs['IOR'].default_value = 1.45
+    principled.inputs['Alpha'].default_value = 0.7  # Add transparency
+    
+    # Link nodes
+    links = mat.node_tree.links
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    # Set blend mode
+    mat.blend_method = 'BLEND'
+    mat.shadow_method = 'HASHED'
+    
+    return mat
+
+def create_window_frame_material():
+    mat = bpy.data.materials.new(name="window_frame_material")
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    
+    # Clear default nodes
+    for node in nodes:
+        nodes.remove(node)
+    
+    # Create nodes
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+    
+    # Setup material
+    principled.inputs['Base Color'].default_value = (0.55, 0.35, 0.15, 1.0)
+    principled.inputs['Roughness'].default_value = 0.5
+    principled.inputs['Specular'].default_value = 0.2
+    
+    # Link nodes
+    links = mat.node_tree.links
+    links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    
+    return mat
+
+# Create materials
+wall_mat = create_wall_material()
+floor_mat = create_floor_material()
+door_mat = create_door_material()
+window_mat = create_window_material()
+window_frame_mat = create_window_frame_material()
+
+# Assign materials to objects
+for obj in bpy.data.objects:
+    if obj.type != 'MESH':
+        continue
         
-        # Separate by material if it has multiple materials
-        if len(obj.material_slots) > 1:
-            bpy.ops.mesh.separate(type='MATERIAL')
-        
-        # Store for later processing
-        objects_to_process.append(obj)
+    # Remove existing materials
+    while obj.data.materials:
+        obj.data.materials.pop()
+    
+    # Assign appropriate material based on object name
+    if 'wall' in obj.name.lower():
+        obj.data.materials.append(wall_mat)
+    elif 'floor' in obj.name.lower():
+        obj.data.materials.append(floor_mat)
+    elif 'door' in obj.name.lower():
+        obj.data.materials.append(door_mat)
+        # Make doors visible from both sides (optional - uncomment if needed)
+        # door_mat.blend_method = 'BLEND'
+        # if 'Principled BSDF' in door_mat.node_tree.nodes:
+        #     door_mat.node_tree.nodes['Principled BSDF'].inputs['Alpha'].default_value = 0.95
+    elif 'window_frame' in obj.name.lower():
+        obj.data.materials.append(window_frame_mat)
+    elif 'window' in obj.name.lower():
+        obj.data.materials.append(window_mat)
 
-# Now process all mesh objects (including newly created ones)
-for obj in bpy.context.scene.objects:
-    if obj.type == 'MESH':
-        # Rename objects based on their material
-        if len(obj.material_slots) > 0:
-            material_name = obj.material_slots[0].material.name if obj.material_slots[0].material else "unknown"
-            obj.name = material_name
-            
-            # Apply modifiers based on object type
-            bpy.ops.object.select_all(action='DESELECT')
-            obj.select_set(True)
-            bpy.context.view_layer.objects.active = obj
-            
-            if "wall" in material_name.lower():
-                bpy.ops.object.modifier_add(type='BEVEL')
-                obj.modifiers["Bevel"].width = 0.05
-                obj.modifiers["Bevel"].segments = 3
-            
-            elif "window" in material_name.lower():
-                # Make windows slightly transparent
-                if obj.material_slots[0].material:
-                    mat = obj.material_slots[0].material
-                    if not mat.use_nodes:
-                        mat.use_nodes = True
-                    
-                    # Set up basic transparency
-                    principled = mat.node_tree.nodes.get('Principled BSDF')
-                    if principled:
-                        principled.inputs['Alpha'].default_value = 0.7
-                    
-                    mat.blend_method = 'BLEND'
 
-# Set up rendering settings
-bpy.context.scene.render.engine = 'CYCLES'
-bpy.context.scene.cycles.device = 'CPU'
-bpy.context.scene.render.resolution_x = 1920
-bpy.context.scene.render.resolution_y = 1080
-bpy.context.scene.render.film_transparent = True
+# Setup camera with automatic positioning
+def setup_camera():
+    # Get bounds of all objects
+    min_x, min_y, min_z = float('inf'), float('inf'), float('inf')
+    max_x, max_y, max_z = float('-inf'), float('-inf'), float('-inf')
+    
+    for obj in bpy.data.objects:
+        if obj.type != 'MESH':
+            continue
+            
+        for vertex in obj.bound_box:
+            x, y, z = obj.matrix_world @ mathutils.Vector(vertex)
+            min_x = min(min_x, x)
+            min_y = min(min_y, y)
+            min_z = min(min_z, z)
+            max_x = max(max_x, x)
+            max_y = max(max_y, y)
+            max_z = max(max_z, z)
+    
+    # Calculate model dimensions and center
+    width = max_x - min_x
+    depth = max_y - min_y
+    height = max_z - min_z
+    center_x = (min_x + max_x) / 2
+    center_y = (min_y + max_y) / 2
+    center_z = (min_z + max_z) / 2
+    
+    # Calculate camera position
+    distance = max(width, depth) * 1.5
+    camera_x = center_x
+    camera_y = center_y - distance
+    camera_z = center_z + height * 0.7
+    
+    # Create camera
+    bpy.ops.object.camera_add(location=(camera_x, camera_y, camera_z))
+    camera = bpy.context.active_object
+    camera.name = 'Camera'
+    
+    # Point camera to model center
+    direction = mathutils.Vector((center_x, center_y, center_z)) - camera.location
+    rot_quat = direction.to_track_quat('-Z', 'Y')
+    camera.rotation_euler = rot_quat.to_euler()
+    
+    # Set as active camera
+    bpy.context.scene.camera = camera
+    
+    # Set camera settings for better output
+    camera.data.lens = 35  # mm
+    
+    return camera
 
-# Save the file
+# Import mathutils if not already imported
+import mathutils
+
+# Setup camera
+camera = setup_camera()
+
+# Configure render settings
+def configure_render_settings():
+    render = bpy.context.scene.render
+    render.engine = 'CYCLES'  # Use Cycles renderer for better quality
+    render.resolution_x = 1920
+    render.resolution_y = 1080
+    render.resolution_percentage = 100
+    render.film_transparent = False
+    
+    # Configure cycles settings for faster preview
+    cycles = bpy.context.scene.cycles
+    cycles.samples = 128
+    cycles.preview_samples = 32
+    cycles.max_bounces = 8
+    cycles.tile_x = 256
+    cycles.tile_y = 256
+    cycles.use_denoising = True
+
+configure_render_settings()
+
+# World settings
+def configure_world():
+    world = bpy.context.scene.world
+    if not world:
+        world = bpy.data.worlds.new("World")
+        bpy.context.scene.world = world
+    
+    world.use_nodes = True
+    bg = world.node_tree.nodes['Background']
+    bg.inputs['Color'].default_value = (0.9, 0.9, 1.0, 1.0)
+    bg.inputs['Strength'].default_value = 1.0
+
+configure_world()
+
+# Save the blend file
 bpy.ops.wm.save_as_mainfile(filepath=output_path)
+print(f"3D model saved to {output_path}")
 """)
         
         # Try to run Blender if available
